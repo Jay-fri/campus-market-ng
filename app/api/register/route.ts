@@ -7,7 +7,7 @@ const registerSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
   phone: z.string().min(11),
-  university: z.string().optional(),
+  university: z.string(),
   password: z.string().min(6),
   role: z.enum(["BUYER", "SELLER"]),
 })
@@ -41,31 +41,42 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Phone number is already in use" }, { status: 409 })
     }
 
-    // Check if any university exists or use the provided one
-    let universityId: string
+    // Check if university exists
+    let universityRecord = null
 
-    if (university) {
-      // Use the provided university ID
-      universityId = university
-    } else {
-      // Check if any university exists
-      const firstUniversity = await db.university.findFirst()
+    try {
+      // First try to find by ID
+      universityRecord = await db.university.findUnique({
+        where: { id: university },
+      })
+    } catch (error) {
+      console.error("Error finding university by ID:", error)
+    }
 
-      if (!firstUniversity) {
-        console.log("No university found, creating default university")
-        // Create a default university
-        const newUniversity = await db.university.create({
+    // If not found by ID, try to find the first university
+    if (!universityRecord) {
+      try {
+        universityRecord = await db.university.findFirst()
+      } catch (error) {
+        console.error("Error finding first university:", error)
+      }
+    }
+
+    // If still no university, create a default one
+    if (!universityRecord) {
+      try {
+        console.log("Creating default university")
+        universityRecord = await db.university.create({
           data: {
             name: "University of Lagos",
-            location: "Lagos",
-            image: "https://images.unsplash.com/photo-1562774053-701939374585?q=80&w=1000",
+            location: "Lagos, Nigeria",
+            image: "https://example.com/unilag.jpg",
           },
         })
-        universityId = newUniversity.id
-        console.log("Created default university with ID:", universityId)
-      } else {
-        universityId = firstUniversity.id
-        console.log("Using existing university with ID:", universityId)
+        console.log("Created default university:", universityRecord.id)
+      } catch (error) {
+        console.error("Error creating default university:", error)
+        return NextResponse.json({ message: "Failed to create university" }, { status: 500 })
       }
     }
 
@@ -73,28 +84,39 @@ export async function POST(req: Request) {
     const hashedPassword = await hash(password, 10)
 
     // Create user
+    const userData = {
+      name,
+      email,
+      phone,
+      universityId: universityRecord.id,
+      password: hashedPassword,
+      role,
+      isActive: true,
+      emailVerified: new Date(), // Auto-verify for demo purposes
+    }
+
+    console.log("Creating user with data:", { ...userData, password: "[REDACTED]" })
+
     const user = await db.user.create({
-      data: {
-        name,
-        email,
-        phone,
-        universityId: universityId,
-        password: hashedPassword,
-        role,
-        isActive: true,
-        emailVerified: new Date(), // Auto-verify for demo purposes
-      },
+      data: userData,
     })
+
+    console.log("User created successfully:", user.id)
 
     // Create wallet for user
-    await db.wallet.create({
-      data: {
-        userId: user.id,
-        balance: 0,
-      },
-    })
+    try {
+      await db.wallet.create({
+        data: {
+          userId: user.id,
+          balance: 0,
+        },
+      })
+      console.log("Wallet created for user:", user.id)
+    } catch (error) {
+      console.error("Error creating wallet:", error)
+      // Don't fail the registration if wallet creation fails
+    }
 
-    console.log("User registered successfully:", user.id)
     return NextResponse.json({ message: "User registered successfully" }, { status: 201 })
   } catch (error) {
     console.error("Registration error:", error)
