@@ -7,7 +7,7 @@ const registerSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),
   phone: z.string().min(11),
-  university: z.string(),
+  university: z.string().optional(),
   password: z.string().min(6),
   role: z.enum(["BUYER", "SELLER"]),
 })
@@ -41,6 +41,34 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Phone number is already in use" }, { status: 409 })
     }
 
+    // Check if any university exists or use the provided one
+    let universityId: string
+
+    if (university) {
+      // Use the provided university ID
+      universityId = university
+    } else {
+      // Check if any university exists
+      const firstUniversity = await db.university.findFirst()
+
+      if (!firstUniversity) {
+        console.log("No university found, creating default university")
+        // Create a default university
+        const newUniversity = await db.university.create({
+          data: {
+            name: "University of Lagos",
+            location: "Lagos",
+            image: "https://images.unsplash.com/photo-1562774053-701939374585?q=80&w=1000",
+          },
+        })
+        universityId = newUniversity.id
+        console.log("Created default university with ID:", universityId)
+      } else {
+        universityId = firstUniversity.id
+        console.log("Using existing university with ID:", universityId)
+      }
+    }
+
     // Hash password
     const hashedPassword = await hash(password, 10)
 
@@ -50,7 +78,7 @@ export async function POST(req: Request) {
         name,
         email,
         phone,
-        universityId: university,
+        universityId: universityId,
         password: hashedPassword,
         role,
         isActive: true,
@@ -75,6 +103,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Invalid data", errors: error.errors }, { status: 400 })
     }
 
-    return NextResponse.json({ message: "Internal server error", error: String(error) }, { status: 500 })
+    return NextResponse.json(
+      {
+        message: "Internal server error",
+        error: String(error),
+        stack: (error as Error).stack,
+      },
+      { status: 500 },
+    )
   }
 }

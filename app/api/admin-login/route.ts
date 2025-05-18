@@ -11,11 +11,40 @@ export async function POST(req: Request) {
     const adminPassword = "admin"
     const hashedPassword = await hash(adminPassword, 10)
 
-    // Get first university for reference
+    // Check if any university exists
+    let universityId: string
     const firstUniversity = await db.university.findFirst()
+
     if (!firstUniversity) {
-      console.error("No university found in database")
-      return NextResponse.json({ message: "No university found in database" }, { status: 500 })
+      console.log("No university found, creating default university")
+      // Create a default university
+      const newUniversity = await db.university.create({
+        data: {
+          name: "University of Lagos",
+          location: "Lagos",
+          image: "https://images.unsplash.com/photo-1562774053-701939374585?q=80&w=1000",
+        },
+      })
+      universityId = newUniversity.id
+      console.log("Created default university with ID:", universityId)
+    } else {
+      universityId = firstUniversity.id
+      console.log("Using existing university with ID:", universityId)
+    }
+
+    // Check if any categories exist
+    const categoryCount = await db.category.count()
+    if (categoryCount === 0) {
+      console.log("No categories found, creating default category")
+      // Create a default category
+      await db.category.create({
+        data: {
+          name: "General",
+          description: "General items and services",
+          image: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=1000",
+        },
+      })
+      console.log("Created default category")
     }
 
     const existingAdmin = await db.user.findUnique({
@@ -44,7 +73,7 @@ export async function POST(req: Request) {
           password: hashedPassword,
           role: "ADMIN",
           phone: "+2348012345678",
-          universityId: firstUniversity.id,
+          universityId: universityId,
           isActive: true,
           emailVerified: new Date(),
           phoneVerified: true,
@@ -71,6 +100,13 @@ export async function POST(req: Request) {
     })
   } catch (error) {
     console.error("Error creating admin user:", error)
-    return NextResponse.json({ message: "Error creating admin user", error: String(error) }, { status: 500 })
+    return NextResponse.json(
+      {
+        message: "Error creating admin user",
+        error: String(error),
+        stack: (error as Error).stack,
+      },
+      { status: 500 },
+    )
   }
 }

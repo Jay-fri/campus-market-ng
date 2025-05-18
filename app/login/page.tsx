@@ -12,7 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2 } from "lucide-react"
+import { Loader2, Database } from "lucide-react"
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address" }),
@@ -30,6 +30,9 @@ export default function LoginPage() {
   const [adminCreating, setAdminCreating] = useState<boolean>(false)
   const [adminCreated, setAdminCreated] = useState<boolean>(false)
   const [adminError, setAdminError] = useState<string | null>(null)
+  const [dbInitializing, setDbInitializing] = useState<boolean>(false)
+  const [dbInitialized, setDbInitialized] = useState<boolean>(false)
+  const [dbError, setDbError] = useState<string | null>(null)
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -123,6 +126,28 @@ export default function LoginPage() {
     }
   }
 
+  async function initializeDatabase() {
+    setDbInitializing(true)
+    setDbError(null)
+    try {
+      const response = await fetch("/api/init-db")
+      const data = await response.json()
+
+      if (response.ok) {
+        setDbInitialized(true)
+        console.log("Database initialized successfully:", data)
+      } else {
+        console.error("Failed to initialize database:", data)
+        setDbError(`Failed to initialize database: ${data.message}`)
+      }
+    } catch (error) {
+      console.error("Error initializing database:", error)
+      setDbError("Failed to initialize database. Please try again.")
+    } finally {
+      setDbInitializing(false)
+    }
+  }
+
   return (
     <div className="container flex h-screen w-screen flex-col items-center justify-center">
       <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
@@ -147,6 +172,16 @@ export default function LoginPage() {
             {adminError && (
               <Alert variant="destructive" className="mb-4">
                 <AlertDescription>{adminError}</AlertDescription>
+              </Alert>
+            )}
+            {dbInitialized && (
+              <Alert className="mb-4 bg-green-50">
+                <AlertDescription>Database initialized successfully!</AlertDescription>
+              </Alert>
+            )}
+            {dbError && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertDescription>{dbError}</AlertDescription>
               </Alert>
             )}
             <Form {...form}>
@@ -196,9 +231,23 @@ export default function LoginPage() {
                   <span className="w-full border-t" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-background px-2 text-muted-foreground">Admin Access</span>
+                  <span className="bg-background px-2 text-muted-foreground">Setup</span>
                 </div>
               </div>
+
+              <Button variant="outline" onClick={initializeDatabase} disabled={dbInitializing} className="w-full">
+                {dbInitializing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Initializing...
+                  </>
+                ) : (
+                  <>
+                    <Database className="mr-2 h-4 w-4" />
+                    Initialize Database
+                  </>
+                )}
+              </Button>
 
               <div className="grid grid-cols-2 gap-2">
                 <Button variant="outline" onClick={createAdminUser} disabled={adminCreating} className="w-full">
