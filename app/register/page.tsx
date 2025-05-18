@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import type React from "react"
+
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -13,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2 } from "lucide-react"
+import { Loader2, Camera, Upload } from "lucide-react"
 
 const registerSchema = z
   .object({
@@ -21,22 +23,68 @@ const registerSchema = z
     email: z.string().email({ message: "Please enter a valid email address" }),
     phone: z.string().min(11, { message: "Phone number must be at least 11 characters" }),
     university: z.string().min(1, { message: "Please select your university" }),
+    customUniversity: z.string().optional(),
+    category: z.string().optional(),
+    customCategory: z.string().optional(),
     password: z.string().min(6, { message: "Password must be at least 6 characters" }),
     confirmPassword: z.string(),
     role: z.enum(["BUYER", "SELLER"]),
+    profileImage: z.string().optional(),
+    faceImage: z.string().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords don't match",
     path: ["confirmPassword"],
   })
+  .refine(
+    (data) => {
+      if (data.university === "other" && (!data.customUniversity || data.customUniversity.length < 2)) {
+        return false
+      }
+      return true
+    },
+    {
+      message: "Please enter your university name",
+      path: ["customUniversity"],
+    },
+  )
+  .refine(
+    (data) => {
+      if (data.role === "SELLER" && !data.faceImage) {
+        return false
+      }
+      return true
+    },
+    {
+      message: "Facial verification is required for sellers",
+      path: ["faceImage"],
+    },
+  )
 
 type RegisterValues = z.infer<typeof registerSchema>
+
+interface University {
+  id: string
+  name: string
+}
+
+interface Category {
+  id: string
+  name: string
+}
 
 export default function RegisterPage() {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [activeTab, setActiveTab] = useState<string>("BUYER")
+  const [universities, setUniversities] = useState<University[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [isCameraActive, setIsCameraActive] = useState(false)
+  const [profileImage, setProfileImage] = useState<string | null>(null)
+  const [faceImage, setFaceImage] = useState<string | null>(null)
+  const [isLoadingUniversities, setIsLoadingUniversities] = useState(true)
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true)
 
   const form = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
@@ -45,11 +93,84 @@ export default function RegisterPage() {
       email: "",
       phone: "",
       university: "",
+      customUniversity: "",
+      category: "",
+      customCategory: "",
       password: "",
       confirmPassword: "",
       role: "BUYER",
+      profileImage: "",
+      faceImage: "",
     },
   })
+
+  // Fetch universities and categories on component mount
+  useEffect(() => {
+    const fetchUniversities = async () => {
+      try {
+        const response = await fetch("/api/universities")
+        if (response.ok) {
+          const data = await response.json()
+          setUniversities(data.universities)
+        }
+      } catch (error) {
+        console.error("Error fetching universities:", error)
+      } finally {
+        setIsLoadingUniversities(false)
+      }
+    }
+
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch("/api/categories")
+        if (response.ok) {
+          const data = await response.json()
+          setCategories(data.categories)
+        }
+      } catch (error) {
+        console.error("Error fetching categories:", error)
+      } finally {
+        setIsLoadingCategories(false)
+      }
+    }
+
+    fetchUniversities()
+    fetchCategories()
+  }, [])
+
+  // Watch for university selection to show/hide custom university input
+  const selectedUniversity = form.watch("university")
+  const showCustomUniversityInput = selectedUniversity === "other"
+
+  // Watch for category selection to show/hide custom category input
+  const selectedCategory = form.watch("category")
+  const showCustomCategoryInput = selectedCategory === "other"
+
+  const takeFacialVerification = () => {
+    setIsCameraActive(true)
+
+    // In a real implementation, we would access the user's camera and take a photo
+    // For now, we'll just simulate this with a timeout and a placeholder image
+    setTimeout(() => {
+      const newFaceImage = "https://source.unsplash.com/random/300x300/?portrait"
+      setFaceImage(newFaceImage)
+      form.setValue("faceImage", newFaceImage)
+      setIsCameraActive(false)
+    }, 2000)
+  }
+
+  const uploadProfileImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    // In a real implementation, we would upload the image to a storage service
+    // For now, we'll just simulate this with a timeout and a placeholder image
+    setTimeout(() => {
+      const newProfileImage = "https://source.unsplash.com/random/300x300/?portrait"
+      setProfileImage(newProfileImage)
+      form.setValue("profileImage", newProfileImage)
+    }, 1000)
+  }
 
   async function onSubmit(data: RegisterValues) {
     setIsLoading(true)
@@ -58,15 +179,28 @@ export default function RegisterPage() {
     try {
       console.log("Submitting registration data:", { ...data, role: activeTab })
 
+      // Prepare the data for submission
+      const submissionData = {
+        ...data,
+        role: activeTab,
+      }
+
+      // If custom university is provided, add it to the submission
+      if (data.university === "other" && data.customUniversity) {
+        submissionData.newUniversity = data.customUniversity
+      }
+
+      // If custom category is provided, add it to the submission
+      if (data.category === "other" && data.customCategory) {
+        submissionData.newCategory = data.customCategory
+      }
+
       const response = await fetch("/api/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          ...data,
-          role: activeTab,
-        }),
+        body: JSON.stringify(submissionData),
       })
 
       const result = await response.json()
@@ -162,13 +296,73 @@ export default function RegisterPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="1">University of Lagos</SelectItem>
-                              <SelectItem value="2">University of Ibadan</SelectItem>
-                              <SelectItem value="3">Obafemi Awolowo University</SelectItem>
-                              <SelectItem value="4">University of Nigeria</SelectItem>
-                              <SelectItem value="5">Ahmadu Bello University</SelectItem>
+                              {isLoadingUniversities ? (
+                                <SelectItem value="loading" disabled>
+                                  Loading universities...
+                                </SelectItem>
+                              ) : (
+                                <>
+                                  {universities.map((university) => (
+                                    <SelectItem key={university.id} value={university.id}>
+                                      {university.name}
+                                    </SelectItem>
+                                  ))}
+                                  <SelectItem value="other">Other (Add your university)</SelectItem>
+                                </>
+                              )}
                             </SelectContent>
                           </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    {showCustomUniversityInput && (
+                      <FormField
+                        control={form.control}
+                        name="customUniversity"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Your University Name</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Enter your university name" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                    <FormField
+                      control={form.control}
+                      name="profileImage"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Profile Picture</FormLabel>
+                          <FormControl>
+                            <div className="flex flex-col items-center gap-4">
+                              <div className="relative w-32 h-32 border-2 border-dashed rounded-full flex items-center justify-center overflow-hidden">
+                                {profileImage ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={profileImage || "/placeholder.svg"}
+                                    alt="Profile"
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <Upload className="h-8 w-8 text-muted-foreground" />
+                                )}
+                                <input
+                                  type="file"
+                                  id="profile-upload"
+                                  className="absolute inset-0 opacity-0 cursor-pointer"
+                                  onChange={uploadProfileImage}
+                                  accept="image/*"
+                                />
+                              </div>
+                              <span className="text-sm text-muted-foreground">
+                                Click to upload your profile picture
+                              </span>
+                            </div>
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -267,13 +461,174 @@ export default function RegisterPage() {
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              <SelectItem value="1">University of Lagos</SelectItem>
-                              <SelectItem value="2">University of Ibadan</SelectItem>
-                              <SelectItem value="3">Obafemi Awolowo University</SelectItem>
-                              <SelectItem value="4">University of Nigeria</SelectItem>
-                              <SelectItem value="5">Ahmadu Bello University</SelectItem>
+                              {isLoadingUniversities ? (
+                                <SelectItem value="loading" disabled>
+                                  Loading universities...
+                                </SelectItem>
+                              ) : (
+                                <>
+                                  {universities.map((university) => (
+                                    <SelectItem key={university.id} value={university.id}>
+                                      {university.name}
+                                    </SelectItem>
+                                  ))}
+                                  <SelectItem value="other">Other (Add your university)</SelectItem>
+                                </>
+                              )}
                             </SelectContent>
                           </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    {showCustomUniversityInput && (
+                      <FormField
+                        control={form.control}
+                        name="customUniversity"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Your University Name</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Enter your university name" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                    <FormField
+                      control={form.control}
+                      name="category"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Primary Selling Category</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select your main category" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {isLoadingCategories ? (
+                                <SelectItem value="loading" disabled>
+                                  Loading categories...
+                                </SelectItem>
+                              ) : (
+                                <>
+                                  {categories.map((category) => (
+                                    <SelectItem key={category.id} value={category.id}>
+                                      {category.name}
+                                    </SelectItem>
+                                  ))}
+                                  <SelectItem value="other">Other (Add new category)</SelectItem>
+                                </>
+                              )}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    {showCustomCategoryInput && (
+                      <FormField
+                        control={form.control}
+                        name="customCategory"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Your Category</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Enter your category name" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                    <FormField
+                      control={form.control}
+                      name="profileImage"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Profile Picture</FormLabel>
+                          <FormControl>
+                            <div className="flex flex-col items-center gap-4">
+                              <div className="relative w-32 h-32 border-2 border-dashed rounded-full flex items-center justify-center overflow-hidden">
+                                {profileImage ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={profileImage || "/placeholder.svg"}
+                                    alt="Profile"
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <Upload className="h-8 w-8 text-muted-foreground" />
+                                )}
+                                <input
+                                  type="file"
+                                  id="profile-upload"
+                                  className="absolute inset-0 opacity-0 cursor-pointer"
+                                  onChange={uploadProfileImage}
+                                  accept="image/*"
+                                />
+                              </div>
+                              <span className="text-sm text-muted-foreground">
+                                Click to upload your profile picture
+                              </span>
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="faceImage"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Facial Verification (Required)</FormLabel>
+                          <FormControl>
+                            <div className="flex flex-col items-center gap-4">
+                              <div className="relative w-48 h-48 border-2 border-dashed rounded-full flex items-center justify-center overflow-hidden">
+                                {faceImage ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={faceImage || "/placeholder.svg"}
+                                    alt="Facial Verification"
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : isCameraActive ? (
+                                  <div className="animate-pulse flex flex-col items-center">
+                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                    <span className="text-sm mt-2">Capturing...</span>
+                                  </div>
+                                ) : (
+                                  <Camera className="h-12 w-12 text-muted-foreground" />
+                                )}
+                              </div>
+                              {faceImage ? (
+                                <span className="text-sm text-green-600">Facial verification complete</span>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  onClick={takeFacialVerification}
+                                  disabled={isCameraActive}
+                                  className="w-full"
+                                >
+                                  {isCameraActive ? (
+                                    <>
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      Capturing...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Camera className="mr-2 h-4 w-4" />
+                                      Take Facial Verification Photo
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+                            </div>
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}

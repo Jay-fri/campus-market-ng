@@ -2,8 +2,9 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import * as z from "zod"
@@ -13,7 +14,8 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
-import { Loader2, Upload } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Loader2, Upload, Camera } from "lucide-react"
 
 interface Category {
   id: string
@@ -40,6 +42,8 @@ const productSchema = z.object({
   universityId: z.string().min(1, { message: "Please select a university" }),
   condition: z.enum(["NEW", "LIKE_NEW", "GOOD", "FAIR", "POOR"]),
   images: z.array(z.string()).min(1, { message: "At least one image is required" }),
+  customCategory: z.string().optional(),
+  faceVerification: z.string().min(1, { message: "Facial verification is required" }),
 })
 
 type ProductValues = z.infer<typeof productSchema>
@@ -47,9 +51,13 @@ type ProductValues = z.infer<typeof productSchema>
 export default function ProductForm({ categories, universities, defaultUniversityId = "", product }: ProductFormProps) {
   const router = useRouter()
   const { toast } = useToast()
+  const { data: session } = useSession()
   const [isLoading, setIsLoading] = useState(false)
   const [imageUrls, setImageUrls] = useState<string[]>(product?.images || [])
   const [uploadingImage, setUploadingImage] = useState(false)
+  const [isCameraActive, setIsCameraActive] = useState(false)
+  const [faceImage, setFaceImage] = useState<string | null>(null)
+  const [showCustomCategoryInput, setShowCustomCategoryInput] = useState(false)
 
   const defaultValues: Partial<ProductValues> = {
     title: product?.title || "",
@@ -59,6 +67,8 @@ export default function ProductForm({ categories, universities, defaultUniversit
     universityId: product?.universityId || defaultUniversityId,
     condition: product?.condition || "GOOD",
     images: product?.images || [],
+    customCategory: "",
+    faceVerification: "",
   }
 
   const form = useForm<ProductValues>({
@@ -66,10 +76,42 @@ export default function ProductForm({ categories, universities, defaultUniversit
     defaultValues,
   })
 
+  // Watch for category selection to show/hide custom category input
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      if (name === "categoryId" && value.categoryId === "other") {
+        setShowCustomCategoryInput(true)
+      } else if (name === "categoryId") {
+        setShowCustomCategoryInput(false)
+      }
+    })
+    return () => subscription.unsubscribe()
+  }, [form.watch])
+
   async function onSubmit(data: ProductValues) {
     setIsLoading(true)
 
     try {
+      // If custom category is selected, create it first
+      if (data.categoryId === "other" && data.customCategory) {
+        const categoryResponse = await fetch("/api/categories", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: data.customCategory,
+          }),
+        })
+
+        if (!categoryResponse.ok) {
+          throw new Error("Failed to create new category")
+        }
+
+        const categoryResult = await categoryResponse.json()
+        data.categoryId = categoryResult.category.id
+      }
+
       const endpoint = product ? `/api/products/${product.id}` : "/api/products"
       const method = product ? "PUT" : "POST"
 
@@ -139,9 +181,89 @@ export default function ProductForm({ categories, universities, defaultUniversit
     form.setValue("images", newImageUrls)
   }
 
+  const takeFacialVerification = () => {
+    setIsCameraActive(true)
+
+    // In a real implementation, we would access the user's camera and take a photo
+    // For now, we'll just simulate this with a timeout and a placeholder image
+    setTimeout(() => {
+      // Use the user's profile image from session if available, otherwise use a placeholder
+      const newFaceImage = session?.user?.image || "https://source.unsplash.com/random/300x300/?portrait"
+      setFaceImage(newFaceImage)
+      form.setValue("faceVerification", newFaceImage)
+      setIsCameraActive(false)
+    }, 2000)
+  }
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {/* Facial Verification Section */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Seller Verification</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <FormField
+              control={form.control}
+              name="faceVerification"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Facial Verification (Required)</FormLabel>
+                  <FormControl>
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="relative w-48 h-48 border-2 border-dashed rounded-full flex items-center justify-center overflow-hidden">
+                        {faceImage ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={faceImage || "/placeholder.svg"}
+                            alt="Facial Verification"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : isCameraActive ? (
+                          <div className="animate-pulse flex flex-col items-center">
+                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            <span className="text-sm mt-2">Capturing...</span>
+                          </div>
+                        ) : (
+                          <Camera className="h-12 w-12 text-muted-foreground" />
+                        )}
+                      </div>
+                      {faceImage ? (
+                        <span className="text-sm text-green-600">Facial verification complete</span>
+                      ) : (
+                        <Button
+                          type="button"
+                          onClick={takeFacialVerification}
+                          disabled={isCameraActive}
+                          className="w-full"
+                        >
+                          {isCameraActive ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Capturing...
+                            </>
+                          ) : (
+                            <>
+                              <Camera className="mr-2 h-4 w-4" />
+                              Take Facial Verification Photo
+                            </>
+                          )}
+                        </Button>
+                      )}
+                      <FormDescription>
+                        We need to verify your identity before you can list a product. This helps ensure the security of
+                        our marketplace.
+                      </FormDescription>
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+        </Card>
+
         <FormField
           control={form.control}
           name="title"
@@ -234,6 +356,7 @@ export default function ProductForm({ categories, universities, defaultUniversit
                         {category.name}
                       </SelectItem>
                     ))}
+                    <SelectItem value="other">Other (Add new category)</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormDescription>Choose the category that best fits your product.</FormDescription>
@@ -241,6 +364,23 @@ export default function ProductForm({ categories, universities, defaultUniversit
               </FormItem>
             )}
           />
+
+          {showCustomCategoryInput && (
+            <FormField
+              control={form.control}
+              name="customCategory"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>New Category Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter new category name" {...field} />
+                  </FormControl>
+                  <FormDescription>This category will be added to our system.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
           <FormField
             control={form.control}

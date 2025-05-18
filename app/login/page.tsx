@@ -27,9 +27,6 @@ export default function LoginPage() {
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard"
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(false)
-  const [adminCreating, setAdminCreating] = useState<boolean>(false)
-  const [adminCreated, setAdminCreated] = useState<boolean>(false)
-  const [adminError, setAdminError] = useState<string | null>(null)
   const [dbInitializing, setDbInitializing] = useState<boolean>(false)
   const [dbInitialized, setDbInitialized] = useState<boolean>(false)
   const [dbError, setDbError] = useState<string | null>(null)
@@ -70,62 +67,6 @@ export default function LoginPage() {
     }
   }
 
-  async function loginAsAdmin() {
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const result = await signIn("credentials", {
-        redirect: false,
-        email: "admin@campusconnect.ng",
-        password: "admin",
-      })
-
-      console.log("Admin login result:", result)
-
-      if (!result?.ok) {
-        setError("Admin login failed. Please try creating the admin account first.")
-        setIsLoading(false)
-        return
-      }
-
-      router.push("/admin")
-    } catch (error) {
-      console.error("Admin login error:", error)
-      setError("An error occurred. Please try again.")
-      setIsLoading(false)
-    }
-  }
-
-  async function createAdminUser() {
-    setAdminCreating(true)
-    setAdminError(null)
-    try {
-      const response = await fetch("/api/admin-login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        setAdminCreated(true)
-        setError(null)
-        console.log("Admin created successfully:", data)
-      } else {
-        console.error("Failed to create admin:", data)
-        setAdminError(`Failed to create admin: ${data.message}`)
-      }
-    } catch (error) {
-      console.error("Error creating admin:", error)
-      setAdminError("Failed to create admin user. Please try again.")
-    } finally {
-      setAdminCreating(false)
-    }
-  }
-
   async function initializeDatabase() {
     setDbInitializing(true)
     setDbError(null)
@@ -162,16 +103,6 @@ export default function LoginPage() {
             {error && (
               <Alert variant="destructive" className="mb-4">
                 <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-            {adminCreated && (
-              <Alert className="mb-4 bg-green-50">
-                <AlertDescription>Admin user created successfully!</AlertDescription>
-              </Alert>
-            )}
-            {adminError && (
-              <Alert variant="destructive" className="mb-4">
-                <AlertDescription>{adminError}</AlertDescription>
               </Alert>
             )}
             {dbInitialized && (
@@ -248,28 +179,6 @@ export default function LoginPage() {
                   </>
                 )}
               </Button>
-
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" onClick={createAdminUser} disabled={adminCreating} className="w-full">
-                  {adminCreating ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    "Create Admin"
-                  )}
-                </Button>
-                <Button onClick={loginAsAdmin} disabled={isLoading} className="w-full">
-                  Login as Admin
-                </Button>
-              </div>
-
-              <div className="text-xs text-center text-muted-foreground">
-                <p>Admin credentials:</p>
-                <p>Email: admin@campusconnect.ng</p>
-                <p>Password: admin</p>
-              </div>
             </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4">

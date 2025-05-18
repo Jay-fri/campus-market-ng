@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -316,25 +316,6 @@ export default function AdminDashboard() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState("dashboard")
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/login")
-    } else if (session?.user?.role !== "ADMIN") {
-      router.push("/dashboard")
-    }
-  }, [session, status, router])
-
-  if (status === "loading") {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="flex flex-col items-center gap-2">
-          <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-t-2 border-primary"></div>
-          <p className="text-sm text-muted-foreground">Loading admin dashboard...</p>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="flex min-h-screen bg-background">

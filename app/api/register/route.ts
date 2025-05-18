@@ -8,8 +8,15 @@ const registerSchema = z.object({
   email: z.string().email(),
   phone: z.string().min(11),
   university: z.string(),
+  customUniversity: z.string().optional(),
+  newUniversity: z.string().optional(),
+  category: z.string().optional(),
+  customCategory: z.string().optional(),
+  newCategory: z.string().optional(),
   password: z.string().min(6),
   role: z.enum(["BUYER", "SELLER"]),
+  profileImage: z.string().optional(),
+  faceImage: z.string().optional(),
 })
 
 export async function POST(req: Request) {
@@ -17,7 +24,8 @@ export async function POST(req: Request) {
     const body = await req.json()
     console.log("Registration request body:", body)
 
-    const { name, email, phone, university, password, role } = registerSchema.parse(body)
+    const validatedData = registerSchema.parse(body)
+    const { name, email, phone, university, newUniversity, password, role, profileImage, faceImage } = validatedData
 
     // Check if user already exists
     const existingUser = await db.user.findUnique({
@@ -41,42 +49,66 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Phone number is already in use" }, { status: 409 })
     }
 
-    // Check if university exists
-    let universityRecord = null
+    // Handle university selection or creation
+    let universityId: string
 
-    try {
-      // First try to find by ID
-      universityRecord = await db.university.findUnique({
-        where: { id: university },
-      })
-    } catch (error) {
-      console.error("Error finding university by ID:", error)
-    }
-
-    // If not found by ID, try to find the first university
-    if (!universityRecord) {
+    if (university === "other" && newUniversity) {
+      // Create a new university
       try {
-        universityRecord = await db.university.findFirst()
+        const newUniversityRecord = await db.university.create({
+          data: {
+            name: newUniversity,
+            location: "Nigeria", // Default location
+            image: "https://source.unsplash.com/random/800x600/?university",
+          },
+        })
+        universityId = newUniversityRecord.id
+        console.log("Created new university:", newUniversityRecord.name, "with ID:", universityId)
       } catch (error) {
-        console.error("Error finding first university:", error)
+        console.error("Error creating new university:", error)
+        return NextResponse.json({ message: "Failed to create new university" }, { status: 500 })
+      }
+    } else {
+      // Use existing university
+      try {
+        const universityRecord = await db.university.findUnique({
+          where: { id: university },
+        })
+
+        if (!universityRecord) {
+          // If university doesn't exist, create a default one
+          const defaultUniversity = await db.university.create({
+            data: {
+              name: "University of Lagos",
+              location: "Lagos, Nigeria",
+              image: "https://source.unsplash.com/random/800x600/?university",
+            },
+          })
+          universityId = defaultUniversity.id
+          console.log("Created default university with ID:", universityId)
+        } else {
+          universityId = universityRecord.id
+        }
+      } catch (error) {
+        console.error("Error finding/creating university:", error)
+        return NextResponse.json({ message: "Failed to process university" }, { status: 500 })
       }
     }
 
-    // If still no university, create a default one
-    if (!universityRecord) {
+    // Handle category creation if provided (for sellers)
+    if (role === "SELLER" && validatedData.category === "other" && validatedData.newCategory) {
       try {
-        console.log("Creating default university")
-        universityRecord = await db.university.create({
+        await db.category.create({
           data: {
-            name: "University of Lagos",
-            location: "Lagos, Nigeria",
-            image: "https://example.com/unilag.jpg",
+            name: validatedData.newCategory,
+            description: `Products in the ${validatedData.newCategory} category`,
+            image: "https://source.unsplash.com/random/800x600/?product",
           },
         })
-        console.log("Created default university:", universityRecord.id)
+        console.log("Created new category:", validatedData.newCategory)
       } catch (error) {
-        console.error("Error creating default university:", error)
-        return NextResponse.json({ message: "Failed to create university" }, { status: 500 })
+        console.error("Error creating new category:", error)
+        // Don't fail registration if category creation fails
       }
     }
 
@@ -88,11 +120,13 @@ export async function POST(req: Request) {
       name,
       email,
       phone,
-      universityId: universityRecord.id,
+      universityId,
       password: hashedPassword,
       role,
       isActive: true,
       emailVerified: new Date(), // Auto-verify for demo purposes
+      profileImage: profileImage || null,
+      faceImage: role === "SELLER" ? faceImage : null,
     }
 
     console.log("Creating user with data:", { ...userData, password: "[REDACTED]" })

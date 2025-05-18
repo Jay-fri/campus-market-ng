@@ -2,9 +2,15 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 import prisma from "@/prisma/client"
+import { env } from "@/lib/env"
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   try {
+    const authHeader = req.headers.get("authorization")
+    if (authHeader !== `Bearer ${env.ADMIN_API_SECRET}`) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const session = await getServerSession(authOptions)
 
     if (!session) {
