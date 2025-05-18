@@ -75,6 +75,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Invalid data", errors: error.errors }, { status: 400 })
     }
 
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ message: "Internal server error", error: String(error) }, { status: 500 })
   }
 }

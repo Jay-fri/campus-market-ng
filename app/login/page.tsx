@@ -29,6 +29,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [adminCreating, setAdminCreating] = useState<boolean>(false)
   const [adminCreated, setAdminCreated] = useState<boolean>(false)
+  const [adminError, setAdminError] = useState<string | null>(null)
 
   const form = useForm<LoginValues>({
     resolver: zodResolver(loginSchema),
@@ -95,6 +96,7 @@ export default function LoginPage() {
 
   async function createAdminUser() {
     setAdminCreating(true)
+    setAdminError(null)
     try {
       const response = await fetch("/api/admin-login", {
         method: "POST",
@@ -103,16 +105,19 @@ export default function LoginPage() {
         },
       })
 
+      const data = await response.json()
+
       if (response.ok) {
         setAdminCreated(true)
         setError(null)
+        console.log("Admin created successfully:", data)
       } else {
-        const data = await response.json()
-        setError(`Failed to create admin: ${data.message}`)
+        console.error("Failed to create admin:", data)
+        setAdminError(`Failed to create admin: ${data.message}`)
       }
     } catch (error) {
       console.error("Error creating admin:", error)
-      setError("Failed to create admin user. Please try again.")
+      setAdminError("Failed to create admin user. Please try again.")
     } finally {
       setAdminCreating(false)
     }
@@ -137,6 +142,11 @@ export default function LoginPage() {
             {adminCreated && (
               <Alert className="mb-4 bg-green-50">
                 <AlertDescription>Admin user created successfully!</AlertDescription>
+              </Alert>
+            )}
+            {adminError && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertDescription>{adminError}</AlertDescription>
               </Alert>
             )}
             <Form {...form}>

@@ -63,11 +63,6 @@ export const authOptions: NextAuthOptions = {
             return null
           }
 
-          if (!user.isActive) {
-            console.log(`User account is deactivated: ${credentials.email}`)
-            throw new Error("Your account has been deactivated. Please contact support.")
-          }
-
           // For admin user, accept "admin" as password
           if (user.role === "ADMIN" && credentials.password === "admin") {
             console.log("Admin login successful with 'admin' password")
@@ -84,6 +79,11 @@ export const authOptions: NextAuthOptions = {
           if (!isPasswordValid) {
             console.log(`Invalid password for user: ${credentials.email}`)
             return null
+          }
+
+          if (!user.isActive) {
+            console.log(`User account is deactivated: ${credentials.email}`)
+            throw new Error("Your account has been deactivated. Please contact support.")
           }
 
           console.log(`Login successful for: ${credentials.email}`)
@@ -123,5 +123,5 @@ export const authOptions: NextAuthOptions = {
       }
     },
   },
-  debug: true, // Enable debug mode to see detailed logs
+  debug: process.env.NODE_ENV === "development",
 }
