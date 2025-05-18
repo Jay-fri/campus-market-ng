@@ -7,12 +7,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   try {
     const session = await getServerSession(authOptions)
 
-    if (!session) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
-    }
-
-    if (session.user.role !== "ADMIN") {
-      return NextResponse.json({ message: "Only admins can activate users" }, { status: 403 })
+    if (!session || session.user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const user = await db.user.findUnique({
@@ -22,10 +18,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     })
 
     if (!user) {
-      return NextResponse.json({ message: "User not found" }, { status: 404 })
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    // Update user status
     const updatedUser = await db.user.update({
       where: {
         id: params.id,
@@ -40,14 +35,14 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       data: {
         userId: user.id,
         title: "Account Activated",
-        message: "Your account has been activated by an administrator",
+        message: "Your account has been activated by an administrator.",
         type: "SYSTEM",
       },
     })
 
     return NextResponse.json(updatedUser)
   } catch (error) {
-    console.error("User activation error:", error)
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
+    console.error("Error activating user:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
