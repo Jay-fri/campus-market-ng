@@ -155,21 +155,27 @@ export default function ProductForm({ categories, universities, defaultUniversit
 
     try {
       // In a real implementation, we would upload the image to a storage service
-      // and get back a URL. For now, we'll simulate this with a timeout and a placeholder.
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // For now, we'll use FileReader to display the selected image
+      const file = files[0]
+      const reader = new FileReader()
 
-      // Generate a random placeholder image URL
-      const newImageUrl = `https://source.unsplash.com/random/800x600/?product&sig=${Date.now()}`
-      const newImageUrls = [...imageUrls, newImageUrl]
-      setImageUrls(newImageUrls)
-      form.setValue("images", newImageUrls)
+      reader.onload = (event) => {
+        if (event.target && event.target.result) {
+          const newImageUrl = event.target.result.toString()
+          const newImageUrls = [...imageUrls, newImageUrl]
+          setImageUrls(newImageUrls)
+          form.setValue("images", newImageUrls)
+          setUploadingImage(false)
+        }
+      }
+
+      reader.readAsDataURL(file)
     } catch (error) {
       toast({
         title: "Error",
         description: "Failed to upload image. Please try again.",
         variant: "destructive",
       })
-    } finally {
       setUploadingImage(false)
     }
   }
@@ -184,15 +190,45 @@ export default function ProductForm({ categories, universities, defaultUniversit
   const takeFacialVerification = () => {
     setIsCameraActive(true)
 
-    // In a real implementation, we would access the user's camera and take a photo
-    // For now, we'll just simulate this with a timeout and a placeholder image
-    setTimeout(() => {
-      // Use the user's profile image from session if available, otherwise use a placeholder
-      const newFaceImage = session?.user?.image || "https://source.unsplash.com/random/300x300/?portrait"
-      setFaceImage(newFaceImage)
-      form.setValue("faceVerification", newFaceImage)
-      setIsCameraActive(false)
-    }, 2000)
+    // Create a video element to capture the camera feed
+    const video = document.createElement("video")
+    const canvas = document.createElement("canvas")
+    const context = canvas.getContext("2d")
+
+    navigator.mediaDevices
+      .getUserMedia({ video: true })
+      .then((stream) => {
+        video.srcObject = stream
+        video.play()
+
+        // After 2 seconds, take a snapshot
+        setTimeout(() => {
+          if (context) {
+            canvas.width = video.videoWidth
+            canvas.height = video.videoHeight
+            context.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+            // Convert canvas to data URL
+            const newFaceImage = canvas.toDataURL("image/jpeg")
+            setFaceImage(newFaceImage)
+            form.setValue("faceVerification", newFaceImage)
+
+            // Stop the camera
+            const tracks = stream.getTracks()
+            tracks.forEach((track) => track.stop())
+            setIsCameraActive(false)
+          }
+        }, 2000)
+      })
+      .catch((error) => {
+        console.error("Error accessing camera:", error)
+        toast({
+          title: "Camera Error",
+          description: "Could not access your camera. Please check permissions.",
+          variant: "destructive",
+        })
+        setIsCameraActive(false)
+      })
   }
 
   return (

@@ -53,6 +53,16 @@ export async function POST(req: Request) {
       },
     })
 
+    console.log("Product created successfully:", {
+      id: product.id,
+      title: product.title,
+      sellerId: product.sellerId,
+      status: product.status,
+    })
+
+    // Log the admin notification attempt
+    console.log("Attempting to notify admins about new product")
+
     // Create notification for admin
     const admins = await prisma.user.findMany({
       where: {

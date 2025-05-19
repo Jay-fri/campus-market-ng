@@ -149,27 +149,60 @@ export default function RegisterPage() {
   const takeFacialVerification = () => {
     setIsCameraActive(true)
 
-    // In a real implementation, we would access the user's camera and take a photo
-    // For now, we'll just simulate this with a timeout and a placeholder image
-    setTimeout(() => {
-      const newFaceImage = "https://source.unsplash.com/random/300x300/?portrait"
-      setFaceImage(newFaceImage)
-      form.setValue("faceImage", newFaceImage)
-      setIsCameraActive(false)
-    }, 2000)
+    // Create a video element to capture the camera feed
+    const video = document.createElement("video")
+    const canvas = document.createElement("canvas")
+    const context = canvas.getContext("2d")
+
+    navigator.mediaDevices
+      .getUserMedia({ video: true })
+      .then((stream) => {
+        video.srcObject = stream
+        video.play()
+
+        // After 2 seconds, take a snapshot
+        setTimeout(() => {
+          if (context) {
+            canvas.width = video.videoWidth
+            canvas.height = video.videoHeight
+            context.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+            // Convert canvas to data URL
+            const newFaceImage = canvas.toDataURL("image/jpeg")
+            setFaceImage(newFaceImage)
+            form.setValue("faceImage", newFaceImage)
+
+            // Stop the camera
+            const tracks = stream.getTracks()
+            tracks.forEach((track) => track.stop())
+            setIsCameraActive(false)
+          }
+        }, 2000)
+      })
+      .catch((error) => {
+        console.error("Error accessing camera:", error)
+        setError("Could not access your camera. Please check permissions.")
+        setIsCameraActive(false)
+      })
   }
 
   const uploadProfileImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files || files.length === 0) return
 
-    // In a real implementation, we would upload the image to a storage service
-    // For now, we'll just simulate this with a timeout and a placeholder image
-    setTimeout(() => {
-      const newProfileImage = "https://source.unsplash.com/random/300x300/?portrait"
-      setProfileImage(newProfileImage)
-      form.setValue("profileImage", newProfileImage)
-    }, 1000)
+    // Use FileReader to display the selected image
+    const file = files[0]
+    const reader = new FileReader()
+
+    reader.onload = (event) => {
+      if (event.target && event.target.result) {
+        const newProfileImage = event.target.result.toString()
+        setProfileImage(newProfileImage)
+        form.setValue("profileImage", newProfileImage)
+      }
+    }
+
+    reader.readAsDataURL(file)
   }
 
   async function onSubmit(data: RegisterValues) {

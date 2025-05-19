@@ -58,6 +58,7 @@ import {
 // Add this import at the top
 import RealTimeIndicator from "./real-time-indicator"
 import { useAdminEvents } from "@/lib/admin-events"
+import { startAdminEventListener } from "@/lib/admin-events"
 
 // Types for our data
 interface User {
@@ -230,6 +231,42 @@ export default function AdminDashboard() {
   const refreshData = () => {
     setRefreshTrigger((prev) => prev + 1)
   }
+
+  // Initialize admin events listener
+  useEffect(() => {
+    if (session?.user?.role === "ADMIN") {
+      const initializeAdminEvents = async () => {
+        try {
+          // Fetch the admin token securely from the server
+          const response = await fetch("/api/admin/get-token")
+          if (response.ok) {
+            const { token } = await response.json()
+            if (token) {
+              const cleanup = startAdminEventListener(token)
+
+              // Fetch initial pending counts
+              const pendingResponse = await fetch("/api/admin/pending-counts", {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              })
+
+              if (pendingResponse.ok) {
+                const data = await pendingResponse.json()
+                useAdminEvents.getState().resetCounts(data)
+              }
+
+              return () => cleanup()
+            }
+          }
+        } catch (error) {
+          console.error("Error initializing admin events:", error)
+        }
+      }
+
+      initializeAdminEvents()
+    }
+  }, [session])
 
   // Fetch dashboard stats
   useEffect(() => {
@@ -677,7 +714,6 @@ export default function AdminDashboard() {
         toast({
           title: "Error",
           description: "Failed to reject withdrawal.",
-          variant: "destructive",
         })
       }
     } catch (error) {
@@ -709,7 +745,6 @@ export default function AdminDashboard() {
         toast({
           title: "Error",
           description: "Failed to complete withdrawal.",
-          variant: "destructive",
         })
       }
     } catch (error) {
@@ -742,7 +777,6 @@ export default function AdminDashboard() {
         toast({
           title: "Error",
           description: "Failed to update order status.",
-          variant: "destructive",
         })
       }
     } catch (error) {

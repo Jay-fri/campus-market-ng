@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useAdminEvents, startAdminEventListener } from "@/lib/admin-events"
 import { useRouter } from "next/navigation"
-import { env } from "@/lib/env"
 
 export default function RealTimeIndicator() {
   const router = useRouter()
@@ -25,6 +24,7 @@ export default function RealTimeIndicator() {
   const pendingWithdrawalCount = useAdminEvents((state) => state.pendingWithdrawalCount)
   const markAllSeen = useAdminEvents((state) => state.markAllSeen)
   const resetCounts = useAdminEvents((state) => state.resetCounts)
+  const [adminToken, setAdminToken] = useState<string | null>(null)
 
   // Total notifications count
   const totalCount = pendingProductCount + pendingReportCount + pendingWithdrawalCount
@@ -33,8 +33,27 @@ export default function RealTimeIndicator() {
   useEffect(() => {
     setIsClient(true)
 
+    // Fetch the admin token securely
+    const fetchToken = async () => {
+      try {
+        const response = await fetch("/api/admin/get-token")
+        if (response.ok) {
+          const { token } = await response.json()
+          setAdminToken(token)
+        }
+      } catch (error) {
+        console.error("Error fetching admin token:", error)
+      }
+    }
+
+    fetchToken()
+  }, [])
+
+  useEffect(() => {
+    if (!adminToken) return
+
     // Start the event listener with the admin API secret
-    const cleanup = startAdminEventListener(env.ADMIN_API_SECRET || "")
+    const cleanup = startAdminEventListener(adminToken || "")
 
     // Fetch initial counts
     const fetchCounts = async () => {
@@ -52,7 +71,7 @@ export default function RealTimeIndicator() {
     fetchCounts()
 
     return cleanup
-  }, [resetCounts])
+  }, [resetCounts, adminToken])
 
   // Handle navigation to specific sections
   const handleNavigation = (tab: string) => {

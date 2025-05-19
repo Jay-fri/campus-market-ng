@@ -52,6 +52,8 @@ export const useAdminEvents = create<AdminEventsState>((set) => ({
 export function startAdminEventListener(adminApiSecret: string) {
   if (typeof window === "undefined") return () => {}
 
+  console.log("Starting admin event listener...")
+
   const eventSource = new EventSource(`/api/admin/events`, {
     withCredentials: true,
   })
@@ -62,16 +64,36 @@ export function startAdminEventListener(adminApiSecret: string) {
       Authorization: `Bearer ${adminApiSecret}`,
     },
   })
+    .then(() => {
+      console.log("Admin events authorization sent")
+    })
+    .catch((err) => {
+      console.error("Error sending admin events authorization:", err)
+    })
 
   const store = useAdminEvents.getState()
 
+  eventSource.onopen = () => {
+    console.log("Admin events connection opened")
+  }
+
   eventSource.onmessage = (event) => {
     try {
+      console.log("Admin event received:", event.data)
       const data = JSON.parse(event.data)
 
-      if (data.type === "ping") return
+      if (data.type === "ping") {
+        console.log("Admin events ping received")
+        return
+      }
+
+      if (data.type === "connected") {
+        console.log("Admin events connected with ID:", data.id)
+        return
+      }
 
       if (data.type === "product_created") {
+        console.log("New product created event received")
         store.addEvent(data)
         store.incrementPendingProduct()
       } else if (data.type === "report_created") {
@@ -98,6 +120,7 @@ export function startAdminEventListener(adminApiSecret: string) {
 
   // Return cleanup function
   return () => {
+    console.log("Closing admin event listener")
     eventSource.close()
   }
 }
