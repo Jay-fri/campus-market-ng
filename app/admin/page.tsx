@@ -55,6 +55,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
+// Add this import at the top
+import RealTimeIndicator from "./real-time-indicator"
+import { useAdminEvents } from "@/lib/admin-events"
+
 // Types for our data
 interface User {
   id: string
@@ -471,6 +475,8 @@ export default function AdminDashboard() {
           title: "Product Approved",
           description: "The product has been approved and is now live.",
         })
+        // Update the real-time count
+        useAdminEvents.getState().decrementPendingProduct()
         refreshData()
       } else {
         toast({
@@ -514,6 +520,8 @@ export default function AdminDashboard() {
           description: "The product has been rejected.",
         })
         setRejectDialog({ open: false, type: "", id: "", reason: "" })
+        // Update the real-time count
+        useAdminEvents.getState().decrementPendingProduct()
         refreshData()
       } else {
         toast({
@@ -868,6 +876,8 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between">
               <h1 className="text-3xl font-bold">Admin Dashboard</h1>
               <div className="flex items-center gap-4">
+                {/* Add the RealTimeIndicator here */}
+                <RealTimeIndicator />
                 <Button size="sm" variant="outline" onClick={refreshData} disabled={isLoading}>
                   {isLoading ? (
                     <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-t-2 border-primary"></div>

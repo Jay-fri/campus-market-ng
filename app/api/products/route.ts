@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
-import { db } from "@/lib/db"
+import prisma from "@/prisma/client"
 import { z } from "zod"
 
 const productSchema = z.object({
@@ -30,23 +30,38 @@ export async function POST(req: Request) {
     const validatedData = productSchema.parse(body)
 
     // Create product
-    const product = await db.product.create({
+    const product = await prisma.product.create({
       data: {
         ...validatedData,
         sellerId: session.user.id,
         status: "PENDING", // All products start as pending and need admin approval
       },
+      include: {
+        seller: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        category: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     })
 
     // Create notification for admin
-    const admins = await db.user.findMany({
+    const admins = await prisma.user.findMany({
       where: {
         role: "ADMIN",
       },
     })
 
     for (const admin of admins) {
-      await db.notification.create({
+      await prisma.notification.create({
         data: {
           userId: admin.id,
           title: "New Product Pending Approval",
@@ -55,6 +70,31 @@ export async function POST(req: Request) {
           link: `/admin/products/${product.id}`,
         },
       })
+    }
+
+    // Emit real-time event for admin dashboard
+    // This is a server-side event, so we'll use a custom endpoint
+    try {
+      await fetch(`${process.env.NEXTAUTH_URL}/api/admin/notify`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.ADMIN_API_SECRET}`,
+        },
+        body: JSON.stringify({
+          type: "product_created",
+          data: {
+            id: product.id,
+            title: product.title,
+            seller: product.seller.name,
+            price: product.price,
+            category: product.category.name,
+          },
+        }),
+      })
+    } catch (error) {
+      console.error("Failed to emit admin event:", error)
+      // Continue anyway, this is not critical
     }
 
     return NextResponse.json(product, { status: 201 })

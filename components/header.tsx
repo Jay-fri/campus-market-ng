@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,77 +15,106 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
-import { getInitials } from "@/lib/utils"
-import { Bell, Menu, MessageSquare, Search, ShoppingCart } from "lucide-react"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetClose,
+} from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/theme-toggle"
+import {
+  Search,
+  ShoppingCart,
+  Menu,
+  User,
+  LogIn,
+  LogOut,
+  Bell,
+  MessageSquare,
+  Home,
+  BookOpen,
+  School,
+  Package,
+  ShoppingBag,
+  Settings,
+  PlusCircle,
+  Wallet,
+} from "lucide-react"
+import { Badge } from "./ui/badge"
 
 export default function Header() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const pathname = usePathname()
-  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [isScrolled, setIsScrolled] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const [cartCount, setCartCount] = useState(0)
+  const [cartItemCount, setCartItemCount] = useState(0)
   const [notificationCount, setNotificationCount] = useState(0)
   const [messageCount, setMessageCount] = useState(0)
 
+  // Handle scroll effect
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 10)
+    }
+    window.addEventListener("scroll", handleScroll)
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [])
+
   // Fetch cart count
   useEffect(() => {
-    const fetchCartCount = async () => {
-      if (session?.user) {
+    if (session && session.user.role === "BUYER") {
+      const fetchCartCount = async () => {
         try {
           const response = await fetch("/api/cart/count")
           if (response.ok) {
             const data = await response.json()
-            setCartCount(data.count)
+            setCartItemCount(data.count)
           }
         } catch (error) {
-          console.error("Error fetching cart count:", error)
+          console.error("Failed to fetch cart count:", error)
         }
       }
+      fetchCartCount()
     }
-
-    fetchCartCount()
   }, [session])
 
   // Fetch notification count
   useEffect(() => {
-    const fetchNotificationCount = async () => {
-      if (session?.user) {
+    if (session) {
+      const fetchNotificationCount = async () => {
         try {
-          const response = await fetch("/api/notifications/count")
+          const response = await fetch("/api/notifications/unread-count")
           if (response.ok) {
             const data = await response.json()
             setNotificationCount(data.count)
           }
         } catch (error) {
-          console.error("Error fetching notification count:", error)
+          console.error("Failed to fetch notification count:", error)
         }
       }
+      fetchNotificationCount()
     }
-
-    fetchNotificationCount()
   }, [session])
 
   // Fetch message count
   useEffect(() => {
-    const fetchMessageCount = async () => {
-      if (session?.user) {
+    if (session) {
+      const fetchMessageCount = async () => {
         try {
-          const response = await fetch("/api/messages/count")
+          const response = await fetch("/api/messages/unread-count")
           if (response.ok) {
             const data = await response.json()
             setMessageCount(data.count)
           }
         } catch (error) {
-          console.error("Error fetching message count:", error)
+          console.error("Failed to fetch message count:", error)
         }
       }
+      fetchMessageCount()
     }
-
-    fetchMessageCount()
   }, [session])
 
   // Close mobile menu when path changes
@@ -92,240 +122,341 @@ export default function Header() {
     setIsMobileMenuOpen(false)
   }, [pathname])
 
-  // Check if user is a buyer
-  const isBuyer = session?.user?.role === "BUYER"
-
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center justify-between">
-        <div className="flex items-center gap-2 md:gap-4">
-          <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
-                <Menu className="h-5 w-5" />
-                <span className="sr-only">Toggle menu</span>
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-[300px] sm:w-[400px] pt-16">
-              <nav className="flex flex-col gap-4 mt-8">
-                <Link href="/" className="text-lg font-semibold" onClick={() => setIsMobileMenuOpen(false)}>
-                  Home
-                </Link>
-                <Link href="/categories" className="text-lg font-semibold" onClick={() => setIsMobileMenuOpen(false)}>
-                  Categories
-                </Link>
-                <Link href="/universities" className="text-lg font-semibold" onClick={() => setIsMobileMenuOpen(false)}>
-                  Universities
-                </Link>
-                {session ? (
-                  <>
-                    <Link
-                      href="/dashboard"
-                      className="text-lg font-semibold"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      Dashboard
-                    </Link>
-                    {session.user.role === "SELLER" && (
-                      <Link href="/seller" className="text-lg font-semibold" onClick={() => setIsMobileMenuOpen(false)}>
-                        Seller Dashboard
-                      </Link>
-                    )}
-                    {session.user.role === "ADMIN" && (
-                      <Link href="/admin" className="text-lg font-semibold" onClick={() => setIsMobileMenuOpen(false)}>
-                        Admin Dashboard
-                      </Link>
-                    )}
-                    <Link href="/profile" className="text-lg font-semibold" onClick={() => setIsMobileMenuOpen(false)}>
-                      Profile
-                    </Link>
-                    <Link href="/orders" className="text-lg font-semibold" onClick={() => setIsMobileMenuOpen(false)}>
-                      Orders
-                    </Link>
-                    <Link href="/messages" className="text-lg font-semibold" onClick={() => setIsMobileMenuOpen(false)}>
-                      Messages
-                    </Link>
-                    <Link
-                      href="/notifications"
-                      className="text-lg font-semibold"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      Notifications
-                    </Link>
-                    {isBuyer && (
-                      <Link href="/cart" className="text-lg font-semibold" onClick={() => setIsMobileMenuOpen(false)}>
-                        Cart
-                      </Link>
-                    )}
-                    <Link href="/api/auth/signout" className="mt-4">
-                      <Button variant="outline" className="w-full" onClick={() => setIsMobileMenuOpen(false)}>
-                        Sign Out
-                      </Button>
-                    </Link>
-                  </>
-                ) : (
-                  <div className="flex flex-col gap-2 mt-4">
-                    <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>
-                      <Button variant="outline" className="w-full">
-                        Log In
-                      </Button>
-                    </Link>
-                    <Link href="/register" onClick={() => setIsMobileMenuOpen(false)}>
-                      <Button className="w-full">Register</Button>
-                    </Link>
-                  </div>
-                )}
-              </nav>
-            </SheetContent>
-          </Sheet>
+    <header
+      className={`sticky top-0 z-50 w-full transition-all duration-200 ${
+        isScrolled ? "bg-background/95 backdrop-blur-sm shadow-sm" : "bg-background"
+      }`}
+    >
+      <div className="container mx-auto flex h-16 items-center justify-between px-4">
+        {/* Logo */}
+        <Link href="/" className="flex items-center gap-2 font-bold text-xl">
+          <ShoppingBag className="h-6 w-6" />
+          <span className="hidden sm:inline-block">Campus Connect NG</span>
+        </Link>
 
-          <Link href="/" className="flex items-center gap-2">
-            <span className="font-bold text-xl md:text-2xl text-primary">
-              CampusConnect<span className="text-foreground">NG</span>
-            </span>
-          </Link>
+        {/* Search Bar - Hidden on mobile */}
+        <div className="hidden md:flex md:flex-1 md:items-center md:justify-center md:px-6">
+          <div className="relative w-full max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input type="search" placeholder="Search products, categories, universities..." className="w-full pl-10" />
+          </div>
         </div>
 
-        <nav className="hidden md:flex items-center gap-6">
-          <Link
-            href="/"
-            className={`text-sm font-medium transition-colors hover:text-primary ${
-              pathname === "/" ? "text-primary" : "text-foreground/60"
-            }`}
-          >
-            Home
-          </Link>
-          <Link
-            href="/categories"
-            className={`text-sm font-medium transition-colors hover:text-primary ${
-              pathname === "/categories" || pathname.startsWith("/categories/") ? "text-primary" : "text-foreground/60"
-            }`}
-          >
-            Categories
-          </Link>
-          <Link
-            href="/universities"
-            className={`text-sm font-medium transition-colors hover:text-primary ${
-              pathname === "/universities" || pathname.startsWith("/universities/")
-                ? "text-primary"
-                : "text-foreground/60"
-            }`}
-          >
-            Universities
-          </Link>
-        </nav>
-
-        <div className="flex items-center gap-2">
-          {isSearchOpen ? (
-            <div className="flex items-center">
-              <Input
-                type="search"
-                placeholder="Search products..."
-                className="w-[200px] md:w-[300px]"
-                autoFocus
-                onBlur={() => setIsSearchOpen(false)}
-              />
-              <Button variant="ghost" size="icon" onClick={() => setIsSearchOpen(false)}>
-                <Search className="h-5 w-5" />
-                <span className="sr-only">Search</span>
-              </Button>
-            </div>
-          ) : (
-            <Button variant="ghost" size="icon" onClick={() => setIsSearchOpen(true)}>
-              <Search className="h-5 w-5" />
-              <span className="sr-only">Search</span>
-            </Button>
-          )}
-
-          <ThemeToggle />
-
-          {session?.user ? (
+        {/* Desktop Navigation */}
+        <nav className="hidden md:flex md:items-center md:gap-4">
+          {session ? (
             <>
-              {/* Only show cart for buyers */}
-              {isBuyer && (
-                <Link href="/cart">
-                  <Button variant="ghost" size="icon" className="relative">
-                    <ShoppingCart className="h-5 w-5" />
-                    {cartCount > 0 && (
-                      <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0">
-                        {cartCount}
-                      </Badge>
-                    )}
-                    <span className="sr-only">Cart</span>
-                  </Button>
-                </Link>
-              )}
-
               <Link href="/notifications">
                 <Button variant="ghost" size="icon" className="relative">
                   <Bell className="h-5 w-5" />
                   {notificationCount > 0 && (
-                    <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0">
-                      {notificationCount}
+                    <Badge
+                      variant="destructive"
+                      className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full p-0 text-xs"
+                    >
+                      {notificationCount > 99 ? "99+" : notificationCount}
                     </Badge>
                   )}
-                  <span className="sr-only">Notifications</span>
                 </Button>
               </Link>
               <Link href="/messages">
                 <Button variant="ghost" size="icon" className="relative">
                   <MessageSquare className="h-5 w-5" />
                   {messageCount > 0 && (
-                    <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0">
-                      {messageCount}
+                    <Badge
+                      variant="destructive"
+                      className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full p-0 text-xs"
+                    >
+                      {messageCount > 99 ? "99+" : messageCount}
                     </Badge>
                   )}
-                  <span className="sr-only">Messages</span>
                 </Button>
               </Link>
+              {session.user.role === "BUYER" && (
+                <Link href="/cart">
+                  <Button variant="ghost" size="icon" className="relative">
+                    <ShoppingCart className="h-5 w-5" />
+                    {cartItemCount > 0 && (
+                      <Badge
+                        variant="destructive"
+                        className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full p-0 text-xs"
+                      >
+                        {cartItemCount > 99 ? "99+" : cartItemCount}
+                      </Badge>
+                    )}
+                  </Button>
+                </Link>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="relative h-8 w-8 rounded-full">
+                  <Button variant="ghost" size="icon" className="rounded-full">
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={session.user.image || ""} alt={session.user.name || ""} />
-                      <AvatarFallback>{getInitials(session.user.name || "User")}</AvatarFallback>
+                      <AvatarImage src={session.user.image || undefined} alt={session.user.name || "User"} />
+                      <AvatarFallback>{session.user.name?.charAt(0) || "U"}</AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">{session.user.name}</p>
+                      <p className="text-xs leading-none text-muted-foreground">{session.user.email}</p>
+                    </div>
+                  </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link href="/dashboard">Dashboard</Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/profile">Profile</Link>
-                  </DropdownMenuItem>
+                  {session.user.role === "BUYER" && (
+                    <>
+                      <DropdownMenuItem asChild>
+                        <Link href="/dashboard" className="w-full cursor-pointer">
+                          <User className="mr-2 h-4 w-4" />
+                          Dashboard
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href="/orders" className="w-full cursor-pointer">
+                          <Package className="mr-2 h-4 w-4" />
+                          My Orders
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
+                  )}
                   {session.user.role === "SELLER" && (
-                    <DropdownMenuItem asChild>
-                      <Link href="/seller">Seller Dashboard</Link>
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuItem asChild>
+                        <Link href="/seller" className="w-full cursor-pointer">
+                          <ShoppingBag className="mr-2 h-4 w-4" />
+                          Seller Dashboard
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href="/seller/products/new" className="w-full cursor-pointer">
+                          <PlusCircle className="mr-2 h-4 w-4" />
+                          Add Product
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href="/seller/wallet" className="w-full cursor-pointer">
+                          <Wallet className="mr-2 h-4 w-4" />
+                          My Wallet
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
                   )}
                   {session.user.role === "ADMIN" && (
                     <DropdownMenuItem asChild>
-                      <Link href="/admin">Admin Dashboard</Link>
+                      <Link href="/admin" className="w-full cursor-pointer">
+                        <Settings className="mr-2 h-4 w-4" />
+                        Admin Dashboard
+                      </Link>
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem asChild>
-                    <Link href="/orders">Orders</Link>
-                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <Link href="/api/auth/signout">Sign Out</Link>
+                    <Link href="/api/auth/signout" className="w-full cursor-pointer">
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Log out
+                    </Link>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </>
           ) : (
-            <div className="hidden md:flex items-center gap-2">
+            <>
               <Link href="/login">
-                <Button variant="ghost">Log In</Button>
+                <Button variant="ghost" size="sm">
+                  <LogIn className="mr-2 h-4 w-4" />
+                  Log in
+                </Button>
               </Link>
               <Link href="/register">
-                <Button>Register</Button>
+                <Button size="sm">Register</Button>
               </Link>
-            </div>
+            </>
           )}
+          <ThemeToggle />
+        </nav>
+
+        {/* Mobile Navigation */}
+        <div className="flex items-center gap-2 md:hidden">
+          {session && session.user.role === "BUYER" && (
+            <Link href="/cart">
+              <Button variant="ghost" size="icon" className="relative">
+                <ShoppingCart className="h-5 w-5" />
+                {cartItemCount > 0 && (
+                  <Badge
+                    variant="destructive"
+                    className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full p-0 text-xs"
+                  >
+                    {cartItemCount > 99 ? "99+" : cartItemCount}
+                  </Badge>
+                )}
+              </Button>
+            </Link>
+          )}
+          <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-[300px] sm:w-[400px]">
+              <SheetHeader className="mb-6">
+                <SheetTitle>Campus Connect NG</SheetTitle>
+                <SheetDescription>University marketplace</SheetDescription>
+              </SheetHeader>
+
+              {/* Mobile Search */}
+              <div className="relative mb-6 w-full">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input type="search" placeholder="Search products..." className="w-full pl-10" />
+              </div>
+
+              {/* Mobile Menu Items */}
+              <div className="flex flex-col space-y-3">
+                <SheetClose asChild>
+                  <Link href="/" className="flex items-center gap-3 rounded-md px-4 py-2 hover:bg-muted">
+                    <Home className="h-5 w-5" />
+                    <span>Home</span>
+                  </Link>
+                </SheetClose>
+                <SheetClose asChild>
+                  <Link href="/products" className="flex items-center gap-3 rounded-md px-4 py-2 hover:bg-muted">
+                    <ShoppingBag className="h-5 w-5" />
+                    <span>Products</span>
+                  </Link>
+                </SheetClose>
+                <SheetClose asChild>
+                  <Link href="/categories" className="flex items-center gap-3 rounded-md px-4 py-2 hover:bg-muted">
+                    <BookOpen className="h-5 w-5" />
+                    <span>Categories</span>
+                  </Link>
+                </SheetClose>
+                <SheetClose asChild>
+                  <Link href="/universities" className="flex items-center gap-3 rounded-md px-4 py-2 hover:bg-muted">
+                    <School className="h-5 w-5" />
+                    <span>Universities</span>
+                  </Link>
+                </SheetClose>
+
+                {session ? (
+                  <>
+                    <div className="my-2 h-px bg-border" />
+                    {session.user.role === "BUYER" && (
+                      <>
+                        <SheetClose asChild>
+                          <Link
+                            href="/dashboard"
+                            className="flex items-center gap-3 rounded-md px-4 py-2 hover:bg-muted"
+                          >
+                            <User className="h-5 w-5" />
+                            <span>Dashboard</span>
+                          </Link>
+                        </SheetClose>
+                        <SheetClose asChild>
+                          <Link href="/orders" className="flex items-center gap-3 rounded-md px-4 py-2 hover:bg-muted">
+                            <Package className="h-5 w-5" />
+                            <span>My Orders</span>
+                          </Link>
+                        </SheetClose>
+                      </>
+                    )}
+                    {session.user.role === "SELLER" && (
+                      <>
+                        <SheetClose asChild>
+                          <Link href="/seller" className="flex items-center gap-3 rounded-md px-4 py-2 hover:bg-muted">
+                            <ShoppingBag className="h-5 w-5" />
+                            <span>Seller Dashboard</span>
+                          </Link>
+                        </SheetClose>
+                        <SheetClose asChild>
+                          <Link
+                            href="/seller/products/new"
+                            className="flex items-center gap-3 rounded-md px-4 py-2 hover:bg-muted"
+                          >
+                            <PlusCircle className="h-5 w-5" />
+                            <span>Add Product</span>
+                          </Link>
+                        </SheetClose>
+                        <SheetClose asChild>
+                          <Link
+                            href="/seller/wallet"
+                            className="flex items-center gap-3 rounded-md px-4 py-2 hover:bg-muted"
+                          >
+                            <Wallet className="h-5 w-5" />
+                            <span>My Wallet</span>
+                          </Link>
+                        </SheetClose>
+                      </>
+                    )}
+                    {session.user.role === "ADMIN" && (
+                      <SheetClose asChild>
+                        <Link href="/admin" className="flex items-center gap-3 rounded-md px-4 py-2 hover:bg-muted">
+                          <Settings className="h-5 w-5" />
+                          <span>Admin Dashboard</span>
+                        </Link>
+                      </SheetClose>
+                    )}
+                    <SheetClose asChild>
+                      <Link
+                        href="/notifications"
+                        className="flex items-center gap-3 rounded-md px-4 py-2 hover:bg-muted"
+                      >
+                        <Bell className="h-5 w-5" />
+                        <span>Notifications</span>
+                        {notificationCount > 0 && (
+                          <Badge variant="destructive" className="ml-auto">
+                            {notificationCount > 99 ? "99+" : notificationCount}
+                          </Badge>
+                        )}
+                      </Link>
+                    </SheetClose>
+                    <SheetClose asChild>
+                      <Link href="/messages" className="flex items-center gap-3 rounded-md px-4 py-2 hover:bg-muted">
+                        <MessageSquare className="h-5 w-5" />
+                        <span>Messages</span>
+                        {messageCount > 0 && (
+                          <Badge variant="destructive" className="ml-auto">
+                            {messageCount > 99 ? "99+" : messageCount}
+                          </Badge>
+                        )}
+                      </Link>
+                    </SheetClose>
+                    <div className="my-2 h-px bg-border" />
+                    <SheetClose asChild>
+                      <Link
+                        href="/api/auth/signout"
+                        className="flex items-center gap-3 rounded-md px-4 py-2 hover:bg-muted"
+                      >
+                        <LogOut className="h-5 w-5" />
+                        <span>Log out</span>
+                      </Link>
+                    </SheetClose>
+                  </>
+                ) : (
+                  <>
+                    <div className="my-2 h-px bg-border" />
+                    <SheetClose asChild>
+                      <Link href="/login" className="flex items-center gap-3 rounded-md px-4 py-2 hover:bg-muted">
+                        <LogIn className="h-5 w-5" />
+                        <span>Log in</span>
+                      </Link>
+                    </SheetClose>
+                    <SheetClose asChild>
+                      <Link href="/register" className="flex items-center gap-3 rounded-md px-4 py-2 hover:bg-muted">
+                        <User className="h-5 w-5" />
+                        <span>Register</span>
+                      </Link>
+                    </SheetClose>
+                  </>
+                )}
+                <div className="my-2 h-px bg-border" />
+                <div className="flex items-center justify-center">
+                  <ThemeToggle />
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
     </header>
