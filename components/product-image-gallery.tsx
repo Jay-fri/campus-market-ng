@@ -11,20 +11,27 @@ interface ProductImageGalleryProps {
 
 export default function ProductImageGallery({ images, title }: ProductImageGalleryProps) {
   const [selectedImage, setSelectedImage] = useState(0)
+  const [loadError, setLoadError] = useState<Record<number, boolean>>({})
 
   // If no images are provided, use a placeholder
-  const displayImages = images.length > 0 ? images : ["/placeholder.svg?height=600&width=600"]
+  const displayImages = images && images.length > 0 ? images : ["/placeholder.svg?height=600&width=600"]
+
+  // Handle image load errors
+  const handleImageError = (index: number) => {
+    setLoadError((prev) => ({ ...prev, [index]: true }))
+  }
 
   return (
     <div className="flex flex-col gap-4">
       <div className="relative aspect-square w-full overflow-hidden rounded-lg border bg-background">
         <Image
-          src={displayImages[selectedImage] || "/placeholder.svg"}
+          src={loadError[selectedImage] ? "/placeholder.svg?height=600&width=600" : displayImages[selectedImage]}
           alt={title}
           fill
           className="object-cover"
           sizes="(max-width: 768px) 100vw, 50vw"
           priority
+          onError={() => handleImageError(selectedImage)}
         />
       </div>
       {displayImages.length > 1 && (
@@ -39,10 +46,11 @@ export default function ProductImageGallery({ images, title }: ProductImageGalle
               onClick={() => setSelectedImage(index)}
             >
               <Image
-                src={image || "/placeholder.svg"}
+                src={loadError[index] ? "/placeholder.svg?height=200&width=200" : image}
                 alt={`${title} - Image ${index + 1}`}
                 fill
                 className="object-cover"
+                onError={() => handleImageError(index)}
               />
             </button>
           ))}
