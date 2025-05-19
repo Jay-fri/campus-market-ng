@@ -3,7 +3,6 @@ import { redirect } from "next/navigation"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 import PasswordProtection from "./password-protection"
-import AdminSidebar from "./components/admin-sidebar"
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const session = await getServerSession(authOptions)
@@ -14,11 +13,10 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   }
 
   return (
-    <div className="flex min-h-screen">
-      <PasswordProtection>
-        <AdminSidebar />
+    <PasswordProtection>
+      <div className="flex min-h-screen">
         <div className="flex-1 overflow-auto">{children}</div>
-      </PasswordProtection>
-    </div>
+      </div>
+    </PasswordProtection>
   )
 }

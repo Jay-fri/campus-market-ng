@@ -14,14 +14,13 @@ export async function middleware(request: NextRequest) {
     if (!authHeader || authHeader !== `Bearer ${adminSecret}`) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    return NextResponse.next()
   }
 
-  // Role-based access control for dashboard routes
-  if (
-    request.nextUrl.pathname.startsWith("/admin") ||
-    request.nextUrl.pathname.startsWith("/seller") ||
-    request.nextUrl.pathname.startsWith("/dashboard")
-  ) {
+  // Role-based access control for seller and buyer dashboard routes only
+  // We'll handle admin access separately in the layout component
+  if (request.nextUrl.pathname.startsWith("/seller") || request.nextUrl.pathname.startsWith("/dashboard")) {
     const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET })
 
     if (!token) {
@@ -30,11 +29,6 @@ export async function middleware(request: NextRequest) {
     }
 
     // Check role-specific access
-    if (request.nextUrl.pathname.startsWith("/admin") && token.role !== "ADMIN") {
-      // Non-admins cannot access admin routes
-      return NextResponse.redirect(new URL("/", request.url))
-    }
-
     if (request.nextUrl.pathname.startsWith("/seller") && token.role !== "SELLER") {
       // Non-sellers cannot access seller routes
       return NextResponse.redirect(new URL("/", request.url))
@@ -50,5 +44,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/admin/:path*", "/admin/:path*", "/seller/:path*", "/dashboard/:path*"],
+  matcher: ["/api/admin/:path*", "/seller/:path*", "/dashboard/:path*"],
 }

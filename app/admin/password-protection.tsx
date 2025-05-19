@@ -13,6 +13,7 @@ export default function PasswordProtection({ children }: { children: React.React
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
   // Check if already authenticated
   useEffect(() => {
@@ -20,6 +21,7 @@ export default function PasswordProtection({ children }: { children: React.React
     if (adminAuth === "true") {
       setIsAuthenticated(true)
     }
+    setIsLoading(false)
   }, [])
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -32,6 +34,14 @@ export default function PasswordProtection({ children }: { children: React.React
     } else {
       setError("Incorrect password. Please try again.")
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+      </div>
+    )
   }
 
   if (isAuthenticated) {

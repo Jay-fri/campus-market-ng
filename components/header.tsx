@@ -1,9 +1,11 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { useSession } from "next-auth/react"
+import { usePathname, useRouter } from "next/navigation"
+import { useSession, signOut } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -48,6 +50,7 @@ import { Badge } from "./ui/badge"
 export default function Header() {
   const { data: session, status } = useSession()
   const pathname = usePathname()
+  const router = useRouter()
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [cartItemCount, setCartItemCount] = useState(0)
@@ -121,6 +124,17 @@ export default function Header() {
   useEffect(() => {
     setIsMobileMenuOpen(false)
   }, [pathname])
+
+  // Handle logout with proper session termination
+  const handleLogout = async (e: React.MouseEvent) => {
+    e.preventDefault()
+
+    // Use NextAuth's signOut function which properly terminates the session
+    await signOut({ redirect: false })
+
+    // Then redirect to home page
+    router.push("/")
+  }
 
   return (
     <header
@@ -253,10 +267,10 @@ export default function Header() {
                   )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <Link href="/api/auth/signout" className="w-full cursor-pointer">
+                    <a href="#" onClick={handleLogout} className="w-full cursor-pointer">
                       <LogOut className="mr-2 h-4 w-4" />
                       Log out
-                    </Link>
+                    </a>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -424,13 +438,14 @@ export default function Header() {
                     </SheetClose>
                     <div className="my-2 h-px bg-border" />
                     <SheetClose asChild>
-                      <Link
-                        href="/api/auth/signout"
+                      <a
+                        href="#"
+                        onClick={handleLogout}
                         className="flex items-center gap-3 rounded-md px-4 py-2 hover:bg-muted"
                       >
                         <LogOut className="h-5 w-5" />
                         <span>Log out</span>
-                      </Link>
+                      </a>
                     </SheetClose>
                   </>
                 ) : (
