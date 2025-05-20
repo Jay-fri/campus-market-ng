@@ -1,134 +1,113 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
-import { db } from "@/lib/db"
+import prisma from "@/prisma/client"
 import { z } from "zod"
 
 const productSchema = z.object({
-  title: z.string().min(3).max(100),
-  description: z.string().min(10),
+  title: z.string().min(5),
+  description: z.string().min(20),
   price: z.number().positive(),
   categoryId: z.string(),
+  universityId: z.string(),
   condition: z.enum(["NEW", "LIKE_NEW", "GOOD", "FAIR", "POOR"]),
   images: z.array(z.string()).min(1),
-  tags: z.array(z.string()).optional(),
-  location: z.string().optional(),
 })
 
 export async function POST(req: Request) {
   try {
-    console.log("Product creation API called")
     const session = await getServerSession(authOptions)
 
     if (!session) {
-      console.log("Unauthorized: No session")
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
     }
 
-    if (session.user.role !== "SELLER") {
-      console.log(`Unauthorized: User role is ${session.user.role}, not SELLER`)
+    if (session.user.role !== "SELLER" && session.user.role !== "ADMIN") {
       return NextResponse.json({ message: "Only sellers can create products" }, { status: 403 })
     }
 
     const body = await req.json()
-    console.log("Request body:", JSON.stringify(body))
-
     const validatedData = productSchema.parse(body)
-    console.log("Validated data:", JSON.stringify(validatedData))
-
-    // Get seller's university
-    const seller = await db.user.findUnique({
-      where: { id: session.user.id },
-      include: { university: true },
-    })
-
-    if (!seller) {
-      console.log("Seller not found in database")
-      return NextResponse.json({ message: "Seller not found" }, { status: 404 })
-    }
-
-    if (!seller.university) {
-      console.log("Seller has no university associated")
-      return NextResponse.json({ message: "Seller must be associated with a university" }, { status: 400 })
-    }
 
     // Create product
-    const product = await db.product.create({
+    const product = await prisma.product.create({
       data: {
-        title: validatedData.title,
-        description: validatedData.description,
-        price: validatedData.price,
-        condition: validatedData.condition,
-        images: validatedData.images,
-        tags: validatedData.tags || [],
-        location: validatedData.location || "",
-        status: "PENDING", // All products start as pending
+        ...validatedData,
         sellerId: session.user.id,
-        categoryId: validatedData.categoryId,
-        universityId: seller.universityId,
+        status: "PENDING", // All products start as pending and need admin approval
+      },
+      include: {
+        seller: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        category: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
     })
 
-    console.log("Product created:", product.id)
+    console.log("Product created successfully:", {
+      id: product.id,
+      title: product.title,
+      sellerId: product.sellerId,
+      status: product.status,
+    })
 
-    // Notify all admins about the new product
-    const admins = await db.user.findMany({
-      where: { role: "ADMIN" },
+    // Log the admin notification attempt
+    console.log("Attempting to notify admins about new product")
+
+    // Create notification for admin
+    const admins = await prisma.user.findMany({
+      where: {
+        role: "ADMIN",
+      },
     })
 
     for (const admin of admins) {
-      await db.notification.create({
+      await prisma.notification.create({
         data: {
           userId: admin.id,
-          title: "New Product Listing",
-          message: `A new product "${product.title}" has been listed and requires approval`,
-          type: "PRODUCT",
+          title: "New Product Pending Approval",
+          message: `A new product "${product.title}" needs your approval`,
+          type: "SYSTEM",
           link: `/admin/products/${product.id}`,
         },
       })
     }
 
-    // Send real-time notification to admin dashboard
+    // Emit real-time event for admin dashboard
+    // This is a server-side event, so we'll use a custom endpoint
     try {
-      // Fetch admin token securely
-      const tokenResponse = await fetch(`${process.env.NEXTAUTH_URL}/api/admin/get-token`, {
-        method: "GET",
+      await fetch(`${process.env.NEXTAUTH_URL}/api/admin/notify`, {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Cookie: req.headers.get("cookie") || "",
+          Authorization: `Bearer ${process.env.ADMIN_API_SECRET}`,
         },
+        body: JSON.stringify({
+          type: "product_created",
+          data: {
+            id: product.id,
+            title: product.title,
+            seller: product.seller.name,
+            price: product.price,
+            category: product.category.name,
+          },
+        }),
       })
-
-      if (tokenResponse.ok) {
-        const { token } = await tokenResponse.json()
-
-        if (token) {
-          // Send notification to admin event stream
-          await fetch(`${process.env.NEXTAUTH_URL}/api/admin/notify`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              type: "product_created",
-              data: {
-                id: product.id,
-                title: product.title,
-                seller: seller.name,
-                timestamp: new Date().toISOString(),
-              },
-            }),
-          })
-          console.log("Real-time admin notification sent")
-        }
-      }
     } catch (error) {
-      console.error("Failed to send real-time admin notification:", error)
-      // Continue execution even if notification fails
+      console.error("Failed to emit admin event:", error)
+      // Continue anyway, this is not critical
     }
 
-    return NextResponse.json({ product }, { status: 201 })
+    return NextResponse.json(product, { status: 201 })
   } catch (error) {
     console.error("Product creation error:", error)
 
@@ -136,98 +115,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Invalid data", errors: error.errors }, { status: 400 })
     }
 
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 })
-  }
-}
-
-export async function GET(req: Request) {
-  try {
-    const url = new URL(req.url)
-    const categoryId = url.searchParams.get("category")
-    const universityId = url.searchParams.get("university")
-    const search = url.searchParams.get("search")
-    const minPrice = url.searchParams.get("minPrice") ? Number(url.searchParams.get("minPrice")) : undefined
-    const maxPrice = url.searchParams.get("maxPrice") ? Number(url.searchParams.get("maxPrice")) : undefined
-    const condition = url.searchParams.get("condition")
-    const sort = url.searchParams.get("sort") || "newest"
-
-    // Build where clause
-    const where: any = {
-      status: "APPROVED", // Only return approved products
-    }
-
-    if (categoryId) {
-      where.categoryId = categoryId
-    }
-
-    if (universityId) {
-      where.universityId = universityId
-    }
-
-    if (search) {
-      where.OR = [
-        { title: { contains: search, mode: "insensitive" } },
-        { description: { contains: search, mode: "insensitive" } },
-        { tags: { has: search } },
-      ]
-    }
-
-    if (minPrice !== undefined || maxPrice !== undefined) {
-      where.price = {}
-
-      if (minPrice !== undefined) {
-        where.price.gte = minPrice
-      }
-
-      if (maxPrice !== undefined) {
-        where.price.lte = maxPrice
-      }
-    }
-
-    if (condition) {
-      where.condition = condition
-    }
-
-    // Determine sort order
-    let orderBy: any = {}
-
-    switch (sort) {
-      case "newest":
-        orderBy = { createdAt: "desc" }
-        break
-      case "oldest":
-        orderBy = { createdAt: "asc" }
-        break
-      case "price_low":
-        orderBy = { price: "asc" }
-        break
-      case "price_high":
-        orderBy = { price: "desc" }
-        break
-      default:
-        orderBy = { createdAt: "desc" }
-    }
-
-    // Get products
-    const products = await db.product.findMany({
-      where,
-      orderBy,
-      include: {
-        seller: {
-          select: {
-            id: true,
-            name: true,
-            image: true,
-          },
-        },
-        category: true,
-        university: true,
-      },
-    })
-
-    return NextResponse.json({ products })
-  } catch (error) {
-    console.error("Error fetching products:", error)
     return NextResponse.json({ message: "Internal server error" }, { status: 500 })
   }
 }
