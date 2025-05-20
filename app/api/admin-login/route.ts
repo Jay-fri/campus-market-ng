@@ -6,6 +6,18 @@ export async function POST(req: Request) {
   try {
     console.log("Admin creation started")
 
+    // Verify database connection
+    if (!process.env.DATABASE_URL) {
+      console.error("DATABASE_URL is not defined")
+      return NextResponse.json(
+        {
+          message: "Database configuration error",
+          error: "DATABASE_URL environment variable is not defined",
+        },
+        { status: 500 },
+      )
+    }
+
     // Create or update admin user
     const adminEmail = "admin@campusconnect.ng"
     const adminPassword = "admin"
@@ -13,82 +25,116 @@ export async function POST(req: Request) {
 
     // Check if any university exists
     let universityId: string
-    const firstUniversity = await db.university.findFirst()
 
-    if (!firstUniversity) {
-      console.log("No university found, creating default university")
-      // Create a default university
-      const newUniversity = await db.university.create({
-        data: {
-          name: "University of Lagos",
-          location: "Lagos",
-          image: "https://images.unsplash.com/photo-1562774053-701939374585?q=80&w=1000",
+    try {
+      const firstUniversity = await db.university.findFirst()
+
+      if (!firstUniversity) {
+        console.log("No university found, creating default university")
+        // Create a default university
+        const newUniversity = await db.university.create({
+          data: {
+            name: "University of Lagos",
+            location: "Lagos",
+            image: "https://images.unsplash.com/photo-1562774053-701939374585?q=80&w=1000",
+          },
+        })
+        universityId = newUniversity.id
+        console.log("Created default university with ID:", universityId)
+      } else {
+        universityId = firstUniversity.id
+        console.log("Using existing university with ID:", universityId)
+      }
+    } catch (dbError) {
+      console.error("Database operation failed:", dbError)
+      return NextResponse.json(
+        {
+          message: "Database operation failed",
+          error: String(dbError),
         },
-      })
-      universityId = newUniversity.id
-      console.log("Created default university with ID:", universityId)
-    } else {
-      universityId = firstUniversity.id
-      console.log("Using existing university with ID:", universityId)
+        { status: 500 },
+      )
     }
 
     // Check if any categories exist
-    const categoryCount = await db.category.count()
-    if (categoryCount === 0) {
-      console.log("No categories found, creating default category")
-      // Create a default category
-      await db.category.create({
-        data: {
-          name: "General",
-          description: "General items and services",
-          image: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=1000",
+    try {
+      const categoryCount = await db.category.count()
+      if (categoryCount === 0) {
+        console.log("No categories found, creating default category")
+        // Create a default category
+        await db.category.create({
+          data: {
+            name: "General",
+            description: "General items and services",
+            image: "https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=1000",
+          },
+        })
+        console.log("Created default category")
+      }
+    } catch (dbError) {
+      console.error("Failed to check or create categories:", dbError)
+      return NextResponse.json(
+        {
+          message: "Failed to check or create categories",
+          error: String(dbError),
         },
-      })
-      console.log("Created default category")
+        { status: 500 },
+      )
     }
 
-    const existingAdmin = await db.user.findUnique({
-      where: { email: adminEmail },
-    })
-
-    if (existingAdmin) {
-      console.log("Updating existing admin user")
-      // Update admin
-      const updatedAdmin = await db.user.update({
+    try {
+      const existingAdmin = await db.user.findUnique({
         where: { email: adminEmail },
-        data: {
-          password: hashedPassword,
-          isActive: true,
-          role: "ADMIN",
-        },
       })
-      console.log("Admin user updated:", updatedAdmin.id)
-    } else {
-      console.log("Creating new admin user")
-      // Create admin
-      const admin = await db.user.create({
-        data: {
-          name: "Admin User",
-          email: adminEmail,
-          password: hashedPassword,
-          role: "ADMIN",
-          phone: "+2348012345678",
-          universityId: universityId,
-          isActive: true,
-          emailVerified: new Date(),
-          phoneVerified: true,
-        },
-      })
-      console.log("Admin user created:", admin.id)
 
-      // Create wallet for admin
-      const wallet = await db.wallet.create({
-        data: {
-          userId: admin.id,
-          balance: 0,
+      if (existingAdmin) {
+        console.log("Updating existing admin user")
+        // Update admin
+        const updatedAdmin = await db.user.update({
+          where: { email: adminEmail },
+          data: {
+            password: hashedPassword,
+            isActive: true,
+            role: "ADMIN",
+          },
+        })
+        console.log("Admin user updated:", updatedAdmin.id)
+      } else {
+        console.log("Creating new admin user")
+        // Create admin
+        const admin = await db.user.create({
+          data: {
+            name: "Admin User",
+            email: adminEmail,
+            password: hashedPassword,
+            role: "ADMIN",
+            phone: "+2348012345678",
+            universityId: universityId,
+            isActive: true,
+            emailVerified: new Date(),
+            phoneVerified: true,
+          },
+        })
+        console.log("Admin user created:", admin.id)
+
+        // Create wallet for admin
+        const wallet = await db.wallet.create({
+          data: {
+            userId: admin.id,
+            balance: 0,
+          },
+        })
+        console.log("Admin wallet created:", wallet.id)
+      }
+    } catch (dbError) {
+      console.error("Failed to create or update admin user:", dbError)
+      return NextResponse.json(
+        {
+          message: "Failed to create or update admin user",
+          error: String(dbError),
         },
-      })
-      console.log("Admin wallet created:", wallet.id)
+        { status: 500 },
+      )
     }
 
     return NextResponse.json({
