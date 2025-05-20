@@ -1,19 +1,21 @@
-import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
-import { authOptions } from "@/lib/auth"
+import { NextResponse } from "next/server"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions)
 
-    if (!session || session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Only provide the token if the user is an admin
+    if (session?.user?.role === "ADMIN") {
+      return NextResponse.json({
+        token: process.env.ADMIN_API_SECRET,
+      })
     }
 
-    // Only provide the token to authenticated admin users
-    return NextResponse.json({ token: process.env.ADMIN_API_SECRET })
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
   } catch (error) {
-    console.error("Error fetching admin token:", error)
+    console.error("Error in get-token route:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
